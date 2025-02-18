@@ -3,7 +3,7 @@
     B -- [K, N]
     C -- [M, N] = A * B
 */
-//------------------ RMem_gemm ------------------//
+//------------------ RMem_float4_gemm ------------------//
 #define OFFSET(row, col, ld) ((row) * (ld) + (col))
 #define FETCH_FLOAT4(pointer) (reinterpret_cast<float4 *>(&(pointer))[0])
 

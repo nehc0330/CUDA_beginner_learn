@@ -4,7 +4,8 @@
     C -- [M, N] = A * B
 */
 // 在v5的基础上对 d_A 存入 SMem 中时进行转置 便于用 FETCH_FLOAT4 读取进入 RMem
-//------------------ RMem_gemm ------------------//
+
+//------------------ TransposeA_float4_gemm ------------------//
 #define OFFSET(row, col, ld) ((row) * (ld) + (col))
 #define FETCH_FLOAT4(pointer) (reinterpret_cast<float4 *>(&(pointer))[0])
 
