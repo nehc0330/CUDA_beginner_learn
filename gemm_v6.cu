@@ -12,39 +12,50 @@
 template <unsigned int M_per_BLOCK,
           unsigned int N_per_BLOCK,
           unsigned int K_per_BLOCK,
-          unsigned int NUM_per_THREAD> // 每个线程处理的 数据数量 4个 grid 里一共 32 * 8个块 block（8,32）
+          unsigned int X_per_THREAD, 
+          unsigned int Y_per_THREAD>
 __global__ void
-gemm_v6(int M, int K, int N, float *d_A, float *d_B, float *d_C)
+gemm_v6(int M, int K, int N,
+    float *__restrict__ d_A,
+    float *__restrict__ d_B,
+    float *__restrict__ d_C)
 {
-    __shared__ float A_block[K_per_BLOCK][M_per_BLOCK]; // 32 * 32
-    __shared__ float B_block[K_per_BLOCK][N_per_BLOCK]; // 32 * 32
-    int tx = threadIdx.x;                               // 每个 tx 处理原来 tx * NUM_per_THREAD 开始的连续四个值
+    // SMem note: transpose A 
+    __shared__ float A_block[K_per_BLOCK][M_per_BLOCK]; 
+    __shared__ float B_block[K_per_BLOCK][N_per_BLOCK]; 
+    
+    // 每个 tx 处理原来 tx * X_per_THREAD 开始的连续四个值
+    int tx = threadIdx.x;                               
     int ty = threadIdx.y;
 
-    // 本线程要计算的 d_C 的值 (* 4)
-    int row = blockIdx.y * M_per_BLOCK + ty * NUM_per_THREAD;
-    int col = blockIdx.x * N_per_BLOCK + tx * NUM_per_THREAD;
+    // d_C 地址
+    int row = blockIdx.y * M_per_BLOCK;
+    int col = blockIdx.x * N_per_BLOCK;
 
     // 计算 sum 的时候也运用 FETCH_FLOAT4() 加速
-    float sum[NUM_per_THREAD][NUM_per_THREAD] = {0.0f};
+    float sum[Y_per_THREAD][X_per_THREAD] = {0.0f};
+    float a_reg[Y_per_THREAD] = {0.0f};
+    float b_reg[X_per_THREAD] = {0.0f};
 
     for (int k = 0; k < K; k += K_per_BLOCK)
     {
-        for (int i = 0; i < NUM_per_THREAD; i++)
+        for (int i = 0; i < Y_per_THREAD; i++)
         {
+            // set K_per_BLOCK = 4 
+            // else 
+            // for i = 1 : K_per_BLOCK / X_per_THREAD
             float4 tmp = {0.0f};
-            tmp = FETCH_FLOAT4(d_A[OFFSET(row + i, k + tx * NUM_per_THREAD, K)]);
+            tmp = FETCH_FLOAT4(d_A[OFFSET(row + ty * Y_per_THREAD + i, 
+                                            k + tx * X_per_THREAD, K)]);
             for (int s = 0; s < 4; ++s)
-            {
-                A_block[k + tx * NUM_per_THREAD + s][row + i] = tmp[s];
-            }
+                A_block[k + tx * X_per_THREAD, s][ty * Y_per_THREAD + i] = tmp[s];
             // A_block[k + tx * NUM_per_THREAD + 4][row + i] = tmp[4]
             //  Load d_A(row + i, k + tx * NUM_per_THREAD + 4)
             //  Store A_block(k + tx * NUM_per_THREAD + 4, row + i)
             //  FETCH_FLOAT4(A_block[ty * NUM_per_THREAD + i][tx * NUM_per_THREAD]) =
             //      FETCH_FLOAT4(d_A[OFFSET(row + i, k + tx * NUM_per_THREAD, K)]);
             FETCH_FLOAT4(B_block[ty * NUM_per_THREAD + i][tx * NUM_per_THREAD]) =
-                FETCH_FLOAT4(d_B[OFFSET(k + ty + i, col, N)]);
+                FETCH_FLOAT4(d_B[OFFSET(k + ty * Y_per_THREAD + i, col + tx * X_per_THREAD, N)]);
         }
 
         __syncthreads();
