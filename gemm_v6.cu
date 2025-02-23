@@ -11,21 +11,21 @@
 
 template <unsigned int M_per_BLOCK,
           unsigned int N_per_BLOCK,
-          unsigned int K_per_BLOCK,
-          unsigned int X_per_THREAD, 
-          unsigned int Y_per_THREAD>
+          unsigned int K_per_BLOCK,  // % 4 = 0
+          unsigned int X_per_THREAD, // % 4 = 0
+          unsigned int Y_per_THREAD> // % 4 = 0
 __global__ void
 gemm_v6(int M, int K, int N,
-    float *__restrict__ d_A,
-    float *__restrict__ d_B,
-    float *__restrict__ d_C)
+        float *__restrict__ d_A,
+        float *__restrict__ d_B,
+        float *__restrict__ d_C)
 {
-    // SMem note: transpose A 
-    __shared__ float A_block[K_per_BLOCK][M_per_BLOCK]; 
-    __shared__ float B_block[K_per_BLOCK][N_per_BLOCK]; 
-    
+    // SMem note: transpose A
+    __shared__ float A_block[K_per_BLOCK][M_per_BLOCK];
+    __shared__ float B_block[K_per_BLOCK][N_per_BLOCK];
+
     // 每个 tx 处理原来 tx * X_per_THREAD 开始的连续四个值
-    int tx = threadIdx.x;                               
+    int tx = threadIdx.x;
     int ty = threadIdx.y;
 
     // d_C 地址
@@ -39,46 +39,40 @@ gemm_v6(int M, int K, int N,
 
     for (int k = 0; k < K; k += K_per_BLOCK)
     {
-        for (int i = 0; i < Y_per_THREAD; i++)
+        for (int i = 0; i < Y_per_THREAD; i++) // sum[Y_per_THREAD][X_per_THREAD]
         {
-            // set K_per_BLOCK = 4 
-            // else 
-            // for i = 1 : K_per_BLOCK / X_per_THREAD
             float4 tmp = {0.0f};
-            tmp = FETCH_FLOAT4(d_A[OFFSET(row + ty * Y_per_THREAD + i, 
-                                            k + tx * X_per_THREAD, K)]);
-            for (int s = 0; s < 4; ++s)
-                A_block[k + tx * X_per_THREAD, s][ty * Y_per_THREAD + i] = tmp[s];
-            // A_block[k + tx * NUM_per_THREAD + 4][row + i] = tmp[4]
-            //  Load d_A(row + i, k + tx * NUM_per_THREAD + 4)
-            //  Store A_block(k + tx * NUM_per_THREAD + 4, row + i)
-            //  FETCH_FLOAT4(A_block[ty * NUM_per_THREAD + i][tx * NUM_per_THREAD]) =
-            //      FETCH_FLOAT4(d_A[OFFSET(row + i, k + tx * NUM_per_THREAD, K)]);
-            FETCH_FLOAT4(B_block[ty * NUM_per_THREAD + i][tx * NUM_per_THREAD]) =
-                FETCH_FLOAT4(d_B[OFFSET(k + ty * Y_per_THREAD + i, col + tx * X_per_THREAD, N)]);
+            for (int j = 0; j < K_per_BLOCK / 4; j++)
+            {
+                tmp = FETCH_FLOAT4(d_A[OFFSET(row + ty * Y_per_THREAD + i,
+                                              k + j * 4, K)]);
+                for (int s = 0; s < 4; ++s)
+                    A_block[j * 4 + s][ty * Y_per_THREAD + i] = tmp[s];
+            }
         }
-
+        for (int i = 0; i < K_per_BLOCK; i++)
+        {
+            FETCH_FLOAT4(B_block[i][tx * X_per_THREAD]) =
+                FETCH_FLOAT4(d_B[OFFSET(k + i, col + tx * X_per_THREAD, N)]);
+        }
         __syncthreads();
 
         // 利用寄存器
         for (int inner_k = 0; inner_k < K_per_BLOCK; inner_k++)
         {
-            // float a_val[4] = {
-            //     A_block[ty * NUM_per_THREAD][inner_k],
-            //     A_block[ty * NUM_per_THREAD + 1][inner_k],
-            //     A_block[ty * NUM_per_THREAD + 2][inner_k],
-            //     A_block[ty * NUM_per_THREAD + 3][inner_k]};
-            float a_val[4] = FETCH_FLOAT4(A_block[inner_k][ty * NUM_per_THREAD]);
-            float b_val[4] = FETCH_FLOAT4(B_block[inner_k][tx * NUM_per_THREAD]);
-            for (int i = 0; i < NUM_per_THREAD; i++)
+            // SMem2RMem per 4
+            for (int i = 0; i < Y_per_THREAD / 4; i++)
+                FETCH_FLOAT4(a_reg[4 * i]) = FETCH_FLOAT4(A_block[inner_k][ty * Y_per_THREAD + 4 * i]);
+            for (int i = 0; i < X_per_THREAD / 4; i++)
+                FETCH_FLOAT4(b_reg[4 * i]) = FETCH_FLOAT4(B_block[inner_k][tx * X_per_THREAD + 4 * i]);
+            for (int i = 0; i < Y_per_THREAD; ++i)
             {
-                for (int j = 0; j < NUM_per_THREAD; ++j)
+                for (int j = 0; j < X_per_THREAD; ++j)
                 {
-                    sum[i][j] += a_val[i] * b_val[j];
+                    sum[i][j] += a_reg[i] * b_reg[j];
                 }
             }
         }
-
         __syncthreads();
     }
 
@@ -88,7 +82,7 @@ gemm_v6(int M, int K, int N,
     {
         for (int j = 0; j < NUM_per_THREAD; ++j)
         {
-            d_C[OFFSET(row + i, col + j, N)] = sum[i][j]; //?
+            d_C[OFFSET(row + i, col + j, N)] = sum[i][j];
         }
     }
 }
