@@ -1,11 +1,4 @@
-/*
-    A -- [M, K]
-    B -- [K, N]
-    C -- [M, N] = A * B
-*/
-
 #define OFFSET(row, col, ld) ((row) * (ld) + (col))
-
 
 //------------------ block_gemm ------------------//
 template<unsigned int BLOCK_SIZE>

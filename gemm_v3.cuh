@@ -1,11 +1,3 @@
-/*
-    A -- [M, K]
-    B -- [K, N]
-    C -- [M, N] = A * B
-*/
-
-#define OFFSET(row, col, ld) ((row) * (ld) + (col))
-
 //------------------ 2 * 2 block_gemm ------------------//
 template <unsigned int BLOCK_SIZE, unsigned int STRIDE>
 __global__ void
@@ -15,12 +7,13 @@ gemm_v3(int M, int K, int N, float *d_A, float *d_B, float *d_C)
     __shared__ float A_block[BLOCK_SIZE * STRIDE][BLOCK_SIZE * STRIDE];
     __shared__ float B_block[BLOCK_SIZE * STRIDE][BLOCK_SIZE * STRIDE];
 
+    int tx = threadIdx.x, ty = threadIdx.y;
     // 找到这个线程计算的第一个块的坐标，这个坐标还要计算其他 STRIDE*STRIDE - 1 个块的数据
-    int row = blockIdx.y * BLOCK_SIZE * STRIDE + threadIdx.y;
-    int col = blockIdx.x * BLOCK_SIZE * STRIDE + threadIdx.x;
+    int row = blockIdx.y * BLOCK_SIZE * STRIDE + ty;
+    int col = blockIdx.x * BLOCK_SIZE * STRIDE + tx;
 
     // 在第一个分块矩阵中的坐标 其他 STRIDE*STRIDE - 1 个块在这个基础上加
-    int tx = threadIdx.x, ty = threadIdx.y;
+    
 
     float sum[STRIDE][STRIDE] = {0.0f};
     for (int k = 0; k < K; k += STRIDE * BLOCK_SIZE)
@@ -47,8 +40,10 @@ gemm_v3(int M, int K, int N, float *d_A, float *d_B, float *d_C)
             {
                 for (int inner_k = 0; inner_k < BLOCK_SIZE * STRIDE; ++inner_k)
                 {
-                    if (row + i * BLOCK_SIZE < M && col + j * BLOCK_SIZE < N)
-                        sum[i][j] += A_block[ty * STRIDE + i][inner_k] * B_block[inner_k][j + tx * STRIDE];
+                    if (k + inner_k < K)
+                    { // 确保不越界
+                        sum[i][j] += A_block[ty + BLOCK_SIZE * i][inner_k] * B_block[inner_k][tx + BLOCK_SIZE * j];
+                    }
                 }
             }
         }
@@ -56,11 +51,17 @@ gemm_v3(int M, int K, int N, float *d_A, float *d_B, float *d_C)
         __syncthreads();
     }
 
+    // 写入结果时检查边界
     for (int i = 0; i < STRIDE; ++i)
     {
         for (int j = 0; j < STRIDE; ++j)
         {
-            d_C[OFFSET(row + i * BLOCK_SIZE, col + j * BLOCK_SIZE, N)] = sum[i][j];
+            int write_row = row + i * BLOCK_SIZE;
+            int write_col = col + j * BLOCK_SIZE;
+            if (write_row < M && write_col < N)
+            {
+                d_C[OFFSET(write_row, write_col, N)] = sum[i][j];
+            }
         }
     }
 }

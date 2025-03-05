@@ -1,20 +1,11 @@
-/*
-    A -- [M, K]
-    B -- [K, N]
-    C -- [M, N] = A * B
-*/
-// grid(16, 16) block(16, 16) A_BLOCK = 128 * K
-// Based on v7, we use Double_Buffer on SMem and RMem
-
 //------------------ Double_Buffer_SMem&RMem_gemm ------------------//
-#define OFFSET(row, col, ld) ((row) * (ld) + (col))
-#define FETCH_FLOAT4(pointer) (reinterpret_cast<float4 *>(&(pointer))[0])
 
 template <unsigned int M_per_BLOCK,  // 128
-          unsigned int N_per_BLOCK,  // 128
           unsigned int K_per_BLOCK,  // 8
-          unsigned int X_per_THREAD, // height of block of C that each thread calculate
-          unsigned int Y_per_THREAD> // width of block of C that each thread calculate
+          unsigned int N_per_BLOCK,  // 128
+          unsigned int Y_per_THREAD, // width of block of C that each thread calculate
+          unsigned int X_per_THREAD> // height of block of C that each thread calculate
+
 __global__ void
 gemm_v8(
     int M, int K, int N,
@@ -25,7 +16,7 @@ gemm_v8(
     const int tx = threadIdx.x;
     const int ty = threadIdx.y;
     const int bx = blockIdx.x;
-    const int by = blockidx.y;
+    const int by = blockIdx.y;
 
     // per thread calc
     float sum[Y_per_THREAD][X_per_THREAD] = {0.0f};
@@ -45,14 +36,16 @@ gemm_v8(
     // per_tile
     const int tid = ty * blockDim.x + tx;
 
+    // 新的块是每四个一列
     int A_tile_col = K_per_BLOCK / 4;
-    int A_tile_row = M_per_BLOCK;
+    // int A_tile_row = M_per_BLOCK;
     // resize A ty tx
     int A_tile_ty = tid / A_tile_col;
     int A_tile_tx = tid % A_tile_col;
 
+    //
     int B_tile_col = N_per_BLOCK / 4;
-    int B_tile_row = K_per_BLOCK;
+    // int B_tile_row = K_per_BLOCK;
     // resize B ty tx
     int B_tile_ty = tid / B_tile_col;
     int B_tile_tx = tid % B_tile_col;
@@ -64,32 +57,46 @@ gemm_v8(
     float4 tmp = {0.0f};
     // 256 个线程 GMem2SMem
     tmp = FETCH_FLOAT4(d_A[OFFSET(row + A_tile_ty, A_tile_tx * 4, K)]);
-    for (int s = 0; s < 4; ++s)
-    {
-        A_block[write][A_tile_tx * 4 + s][A_tile_ty] = tmp[s];
-    }
+
+    A_block[write][A_tile_tx * 4 + 0][A_tile_ty] = tmp.x;
+    A_block[write][A_tile_tx * 4 + 1][A_tile_ty] = tmp.y;
+    A_block[write][A_tile_tx * 4 + 2][A_tile_ty] = tmp.z;
+    A_block[write][A_tile_tx * 4 + 3][A_tile_ty] = tmp.w;
 
     for (int i = 0; i < X_per_THREAD; ++i)
         FETCH_FLOAT4(B_block[write][B_tile_ty][B_tile_tx * 4]) =
             FETCH_FLOAT4(d_B[OFFSET(B_tile_ty, col + B_tile_tx * 4, N)]);
     __syncthreads();
     write ^= 1;
-    // 开始循环
+
+    // 进入大循环
     for (int k = K_per_BLOCK; k < K; k += K_per_BLOCK)
     {
-
         tmp = FETCH_FLOAT4(d_A[OFFSET(row + A_tile_ty, k + A_tile_tx * 4, K)]);
-        for (int s = 0; s < 4; ++s)
-        {
-            A_block[write][A_tile_tx * 4 + s][A_tile_ty] = tmp[s];
-        }
+
+        A_block[write][A_tile_tx * 4 + 0][A_tile_ty] = tmp.x;
+        A_block[write][A_tile_tx * 4 + 1][A_tile_ty] = tmp.y;
+        A_block[write][A_tile_tx * 4 + 2][A_tile_ty] = tmp.z;
+        A_block[write][A_tile_tx * 4 + 3][A_tile_ty] = tmp.w;
 
         for (int i = 0; i < X_per_THREAD; ++i)
             FETCH_FLOAT4(B_block[write][B_tile_ty][B_tile_tx * 4]) =
                 FETCH_FLOAT4(d_B[OFFSET(k + B_tile_ty, col + B_tile_tx * 4, N)]);
         write ^= 1;
+
         // 利用寄存器
-        for (int inner_k = 0; inner_k < K_per_BLOCK; ++inner_k)
+        // 进入循环之前先预取一部分到寄存器中
+        int reg_write = 0;
+        int reg_read = 0;
+        float a_reg[2][Y_per_THREAD / 2];
+        float b_reg[2][X_per_THREAD / 2];
+        FETCH_FLOAT4(a_reg[reg_write][0]) = FETCH_FLOAT4(A_block[read][0][ty * Y_per_THREAD]);
+        // FETCH_FLOAT4(a_reg[reg_write][4]) = FETCH_FLOAT4(A_block[read][inner_k][ty * Y_per_THREAD + 4]);
+        FETCH_FLOAT4(b_reg[reg_write][0]) = FETCH_FLOAT4(B_block[read][0][tx * X_per_THREAD]);
+        // FETCH_FLOAT4(b_reg[reg_write][4]) = FETCH_FLOAT4(B_block[read][inner_k][tx * X_per_THREAD + 4]);
+        reg_write ^= 1;
+#pragma unroll
+        for (int inner_k = 1; inner_k < K_per_BLOCK; ++inner_k)
         {
             // SMem2RMem per 4
             // for (int i = 0; i < Y_per_THREAD / 4; i++)
@@ -97,19 +104,43 @@ gemm_v8(
             // for (int i = 0; i < X_per_THREAD / 4; i++)
             //     FETCH_FLOAT4(b_reg[4 * i]) = FETCH_FLOAT4(B_block[inner_k][tx * X_per_THREAD + 4 * i]);
             // 改写以上代码 用到double buffer 技术
-            
-            for (int i = 0; i < Y_per_THREAD; ++i)
+            FETCH_FLOAT4(a_reg[reg_write][0]) = FETCH_FLOAT4(A_block[read][inner_k][ty * Y_per_THREAD + 4]);
+            FETCH_FLOAT4(b_reg[reg_write][0]) = FETCH_FLOAT4(B_block[read][inner_k][tx * X_per_THREAD + 4]);
+            reg_write ^= 1;
+            for (int i = 0; i < Y_per_THREAD / 2; ++i)
             {
-                for (int j = 0; j < X_per_THREAD; ++j)
+                for (int j = 0; j < X_per_THREAD / 2; ++j)
                 {
-                    sum[i][j] += a_reg[i] * b_reg[j];
+                    sum[i][j] += a_reg[reg_read][i] * b_reg[reg_read][j];
                 }
             }
+            reg_read ^= 1;
         }
+
+        FETCH_FLOAT4(a_reg[reg_write][0]) = FETCH_FLOAT4(A_block[read][K_per_BLOCK - 1][ty * Y_per_THREAD + 4]);
+        FETCH_FLOAT4(b_reg[reg_write][0]) = FETCH_FLOAT4(B_block[read][K_per_BLOCK - 1][tx * X_per_THREAD + 4]);
+
+        for (int i = 0; i < Y_per_THREAD / 2; ++i)
+        {
+            for (int j = 0; j < X_per_THREAD / 2; ++j)
+            {
+                sum[i][j] += a_reg[reg_read][i] * b_reg[reg_read][j];
+            }
+        }
+        reg_read ^= 1;
+        for (int i = 0; i < Y_per_THREAD / 2; ++i)
+        {
+            for (int j = 0; j < X_per_THREAD / 2; ++j)
+            {
+                sum[i][j] += a_reg[reg_read][i] * b_reg[reg_read][j];
+            }
+        }
+
+        //---------------------------------------------------------------------------------------
         __syncthreads();
         read ^= 1;
     }
-
+#pragma unroll
     for (int inner_k = 0; inner_k < K_per_BLOCK; ++inner_k)
     {
         // FETCH_FLOAT4(a_reg[0]) = FETCH_FLOAT4(A_block[read][inner_k][ty * Y_per_THREAD]);
@@ -130,8 +161,8 @@ gemm_v8(
         }
     }
 
-    // 同步 下一步循环要清空SMem 必须要把数据用完
-
+// 同步 下一步循环要清空SMem 必须要把数据用完
+#pragma unroll
     for (int i = 0; i < Y_per_THREAD; ++i)
     {
         for (int j = 0; j < X_per_THREAD; ++j)
