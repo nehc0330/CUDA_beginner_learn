@@ -4,7 +4,7 @@
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
 
-#define tol 1 // machine zero 0.01
+#define tol 1e-2 // machine zero 0.01
 #define OFFSET(row, col, ld) ((row) * (ld) + (col))
 #define FETCH_FLOAT4(pointer) (reinterpret_cast<float4 *>(&(pointer))[0])
 #define checkCudaErrors(func)                                                      \
@@ -15,7 +15,6 @@
     }
 
 void init_matrix(int row, int col, float *matrix);
-void cublas_sgemm(int M, int K, int N, float *__restrict__ d_A, float *__restrict__ d_B, float *__restrict__ d_C);
 void cpu_gemm(float *A, float *B, float *C, const int m, const int k, const int n);
 void compare_ans(float *h_C_cpu, float *h_C_gpu, int m, int n);
 void GlobalMemory(int M, int K, int N,float *__restrict__ d_A,   float *__restrict__ d_B,    float *__restrict__ d_C);

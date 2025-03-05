@@ -6,4 +6,3 @@
 #include"gemm_v6.cuh"
 #include"gemm_v7.cuh"
 #include"gemm_v8.cuh"
-#include"cublas.cuh"

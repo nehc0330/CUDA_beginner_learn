@@ -18,11 +18,6 @@ void init_matrix(int row, int col, float *matrix)
     }
 }
 
-void cublas_sgemm(int M, int K, int N, float *__restrict__ d_A, float *__restrict__ d_B, float *__restrict__ d_C)
-{
-    
-}
-
 void cpu_gemm(float *A, float *B, float *C, const int m, const int k, const int n)
 {
     for (int i = 0; i < m; ++i)
