@@ -5,8 +5,7 @@
 #include "kernels.cuh"
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
-#include <omp.h>
-// initial matrix
+
 void init_matrix(int row, int col, float *matrix)
 {
     for (int i = 0; i < row; i++)
@@ -151,9 +150,9 @@ void Double_Buffer_RMem_SMem(int M, int K, int N, float *__restrict__ d_A, float
     constexpr int N_per_BLOCK = 128;
     constexpr int Y_per_THREAD = 8;
     constexpr int X_per_THREAD = 8;
-    dim3 block(N_per_BLOCK/X_per_THREAD,M_per_BLOCK/Y_per_THREAD);
+    dim3 block(N_per_BLOCK/X_per_THREAD,M_per_BLOCK/Y_per_THREAD);// 16 * 16 
     dim3 grid((N + N_per_BLOCK- 1) / (N_per_BLOCK), (M + M_per_BLOCK - 1) / (M_per_BLOCK));
     printf("gemm_v8 TIME is \n");
-    gemm_v7<M_per_BLOCK, K_per_BLOCK, N_per_BLOCK,Y_per_THREAD, X_per_THREAD><<<grid, block>>>(M, K, N, d_A, d_B, d_C);
+    gemm_v8<M_per_BLOCK, K_per_BLOCK, N_per_BLOCK,Y_per_THREAD, X_per_THREAD><<<grid, block>>>(M, K, N, d_A, d_B, d_C);
     checkCudaErrors(cudaDeviceSynchronize());
 }

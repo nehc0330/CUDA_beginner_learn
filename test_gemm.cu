@@ -4,7 +4,7 @@
 #include <cmath>
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
-int num = 2048 * 8;
+int num = 1024 * 3;
 // C = A * B
 
 int main()
@@ -91,11 +91,11 @@ int main()
     // test_v6 4.4ms
     // Transpose_RMem_Float4_ShareMemory(M,K,N,d_A,d_B,d_C);
 
-    // test_v7; 2.9ms
-    Buffer_Transpose_RMem_Float4_ShareMemory(M, K, N, d_A, d_B, d_C);
+    // test_v7 2.9ms
+    // Buffer_Transpose_RMem_Float4_ShareMemory(M, K, N, d_A, d_B, d_C);
 
-    // test_v8;
-    // Double_Buffer_RMem_SMem(M,K,N,d_A,d_B,d_C);
+    // test_v8 
+    Double_Buffer_RMem_SMem(M,K,N,d_A,d_B,d_C);
 
     checkCudaErrors(cudaEventRecord(stop, 0));
     checkCudaErrors(cudaEventSynchronize(stop)); // 确保事件完成

@@ -60,9 +60,9 @@ gemm_v7(
     A_block[write][A_tile_tx * 4 + 2][A_tile_ty] = tmp.z;
     A_block[write][A_tile_tx * 4 + 3][A_tile_ty] = tmp.w;
 
-    for (int i = 0; i < X_per_THREAD; ++i)
-        FETCH_FLOAT4(B_block[write][B_tile_ty][B_tile_tx * 4]) =
-            FETCH_FLOAT4(d_B[OFFSET(B_tile_ty, col + B_tile_tx * 4, N)]);
+    
+    FETCH_FLOAT4(B_block[write][B_tile_ty][B_tile_tx * 4]) =
+         FETCH_FLOAT4(d_B[OFFSET(B_tile_ty, col + B_tile_tx * 4, N)]);
     __syncthreads();
     write ^= 1;
     // 开始循环
@@ -75,10 +75,11 @@ gemm_v7(
         A_block[write][A_tile_tx * 4 + 2][A_tile_ty] = tmp.z;
         A_block[write][A_tile_tx * 4 + 3][A_tile_ty] = tmp.w;
 
-        for (int i = 0; i < X_per_THREAD; ++i)
-            FETCH_FLOAT4(B_block[write][B_tile_ty][B_tile_tx * 4]) =
-                FETCH_FLOAT4(d_B[OFFSET(k + B_tile_ty, col + B_tile_tx * 4, N)]);
+        
+        FETCH_FLOAT4(B_block[write][B_tile_ty][B_tile_tx * 4]) =
+            FETCH_FLOAT4(d_B[OFFSET(k + B_tile_ty, col + B_tile_tx * 4, N)]);
         write ^= 1;
+
         // 利用寄存器
         for (int inner_k = 0; inner_k < K_per_BLOCK; ++inner_k)
         {
@@ -103,7 +104,7 @@ gemm_v7(
     for (int inner_k = 0; inner_k < K_per_BLOCK; ++inner_k)
     {
         float a_reg[Y_per_THREAD];
-        float b_reg[Y_per_THREAD];
+        float b_reg[X_per_THREAD];
         FETCH_FLOAT4(a_reg[0]) = FETCH_FLOAT4(A_block[read][inner_k][ty * Y_per_THREAD]);
         FETCH_FLOAT4(a_reg[4]) = FETCH_FLOAT4(A_block[read][inner_k][ty * Y_per_THREAD + 4]);
         FETCH_FLOAT4(b_reg[0]) = FETCH_FLOAT4(B_block[read][inner_k][tx * X_per_THREAD]);
