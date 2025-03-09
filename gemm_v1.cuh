@@ -1,5 +1,5 @@
-#pragma once
 //------------------ naive_sgemm ------------------//
+#pragma once
 __global__ void
 gemm_v1(
     int M, int K, int N,

@@ -1,5 +1,5 @@
 //------------------ RMem_float4_gemm ------------------//
-
+#pragma once
 template <unsigned int M_per_BLOCK,
           unsigned int N_per_BLOCK,
           unsigned int K_per_BLOCK,

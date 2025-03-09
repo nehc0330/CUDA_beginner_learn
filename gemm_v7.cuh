@@ -1,5 +1,6 @@
 // grid(16, 16) block(16, 16) A_BLOCK = 128 * K
 //------------------ Double_Buffer_SMem_gemm ------------------//
+#pragma once
 template <unsigned int M_per_BLOCK,  // 128
           unsigned int K_per_BLOCK,  // 8
           unsigned int N_per_BLOCK,  // 128

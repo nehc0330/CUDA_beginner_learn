@@ -1,5 +1,6 @@
 // v3 是跨越访问 v4 改进这一点 一次性拿 STRIDE * STRIDE (= 4)个
 //------------------ float4_gemm ------------------//
+#pragma once
 template <unsigned int M_per_BLOCK,//32
           unsigned int K_per_BLOCK,//32
           unsigned int N_per_BLOCK,//32

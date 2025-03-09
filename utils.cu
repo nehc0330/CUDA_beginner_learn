@@ -56,7 +56,6 @@ void GlobalMemory(int M, int K, int N, float *__restrict__ d_A, float *__restric
     int Block = 32;
     dim3 block(Block, Block);
     dim3 grid((M + Block - 1) / Block, (N + Block - 1) / Block);
-    printf("gemm_v1 TIME is \n");
     gemm_v1<<<grid, block>>>(M, K, N, d_A, d_B, d_C);
     checkCudaErrors(cudaDeviceSynchronize());
 }
@@ -67,7 +66,6 @@ void ShareMemory(int M, int K, int N, float *__restrict__ d_A, float *__restrict
     constexpr int Block = 32;
     dim3 block(Block, Block);
     dim3 grid((N + Block - 1) / Block, (M + Block - 1) / Block);
-    printf("gemm_v2 TIME is \n");
     gemm_v2<Block><<<grid, block>>>(M, K, N, d_A, d_B, d_C);
     checkCudaErrors(cudaDeviceSynchronize());
 }
@@ -79,7 +77,6 @@ void STRIDE_ShareMemory(int M, int K, int N, float *__restrict__ d_A, float *__r
     constexpr int STRIDE = 2;
     dim3 block(Block, Block);
     dim3 grid((N + Block * STRIDE - 1) / (Block * STRIDE), (M + Block * STRIDE - 1) / (Block * STRIDE));
-    printf("gemm_v3 TIME is \n");
     gemm_v3<Block, STRIDE><<<grid, block>>>(M, K, N, d_A, d_B, d_C);
     checkCudaErrors(cudaDeviceSynchronize());
 }
@@ -93,7 +90,6 @@ void Float4_ShareMemory(int M, int K, int N, float *__restrict__ d_A, float *__r
     constexpr int NUM_per_THREAD = 4;
     dim3 block(N_per_BLOCK/NUM_per_THREAD,M_per_BLOCK);
     dim3 grid((N + N_per_BLOCK- 1) / (N_per_BLOCK), (M + M_per_BLOCK - 1) / (M_per_BLOCK));
-    printf("gemm_v4 TIME is \n");
     gemm_v4<M_per_BLOCK, K_per_BLOCK, N_per_BLOCK, NUM_per_THREAD><<<grid, block>>>(M, K, N, d_A, d_B, d_C);
     checkCudaErrors(cudaDeviceSynchronize());
 }
@@ -107,7 +103,6 @@ void RMem_Float4_ShareMemory(int M, int K, int N, float *__restrict__ d_A, float
     constexpr int NUM_per_THREAD = 4;
     dim3 block(N_per_BLOCK/NUM_per_THREAD,M_per_BLOCK/NUM_per_THREAD);
     dim3 grid((N + N_per_BLOCK- 1) / (N_per_BLOCK), (M + M_per_BLOCK - 1) / (M_per_BLOCK));
-    printf("gemm_v5 TIME is \n");
     gemm_v5<M_per_BLOCK, K_per_BLOCK, N_per_BLOCK, NUM_per_THREAD><<<grid, block>>>(M, K, N, d_A, d_B, d_C);
     checkCudaErrors(cudaDeviceSynchronize());
 }
@@ -122,7 +117,6 @@ void Transpose_RMem_Float4_ShareMemory(int M, int K, int N, float *__restrict__ 
     constexpr int X_per_THREAD = 4;
     dim3 block(N_per_BLOCK/X_per_THREAD,M_per_BLOCK/Y_per_THREAD);
     dim3 grid((N + N_per_BLOCK- 1) / (N_per_BLOCK), (M + M_per_BLOCK - 1) / (M_per_BLOCK));
-    printf("gemm_v6 TIME is \n");
     gemm_v6<M_per_BLOCK, K_per_BLOCK, N_per_BLOCK,Y_per_THREAD, X_per_THREAD><<<grid, block>>>(M, K, N, d_A, d_B, d_C);
     checkCudaErrors(cudaDeviceSynchronize());
 }
@@ -137,7 +131,6 @@ void Buffer_Transpose_RMem_Float4_ShareMemory(int M, int K, int N, float *__rest
     constexpr int X_per_THREAD = 8;
     dim3 block(N_per_BLOCK/X_per_THREAD,M_per_BLOCK/Y_per_THREAD);
     dim3 grid((N + N_per_BLOCK- 1) / (N_per_BLOCK), (M + M_per_BLOCK - 1) / (M_per_BLOCK));
-    printf("gemm_v7 TIME is \n");
     gemm_v7<M_per_BLOCK, K_per_BLOCK, N_per_BLOCK,Y_per_THREAD, X_per_THREAD><<<grid, block>>>(M, K, N, d_A, d_B, d_C);
     checkCudaErrors(cudaDeviceSynchronize());
 }
@@ -152,7 +145,6 @@ void Double_Buffer_RMem_SMem(int M, int K, int N, float *__restrict__ d_A, float
     constexpr int X_per_THREAD = 8;
     dim3 block(N_per_BLOCK/X_per_THREAD,M_per_BLOCK/Y_per_THREAD);// 16 * 16 
     dim3 grid((N + N_per_BLOCK- 1) / (N_per_BLOCK), (M + M_per_BLOCK - 1) / (M_per_BLOCK));
-    printf("gemm_v8 TIME is \n");
     gemm_v8<M_per_BLOCK, K_per_BLOCK, N_per_BLOCK,Y_per_THREAD, X_per_THREAD><<<grid, block>>>(M, K, N, d_A, d_B, d_C);
     checkCudaErrors(cudaDeviceSynchronize());
 }

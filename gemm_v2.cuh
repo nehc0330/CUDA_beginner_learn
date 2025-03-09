@@ -1,9 +1,12 @@
-#define OFFSET(row, col, ld) ((row) * (ld) + (col))
-
 //------------------ block_gemm ------------------//
+#pragma once
 template<unsigned int BLOCK_SIZE>
 __global__ void
-gemm_v2(int M, int K, int N, float *d_A, float *d_B, float *d_C)
+gemm_v2(
+    int M, int K, int N,
+    float *__restrict__ d_A,
+    float *__restrict__ d_B,
+    float *__restrict__ d_C)
 {
     // 在 SMem 中存储 d_A 和 d_B 的块 读取
     __shared__ float A_block[BLOCK_SIZE][BLOCK_SIZE];

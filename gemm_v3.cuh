@@ -1,9 +1,13 @@
 //------------------ 2 * 2 block_gemm ------------------//
+#pragma once
 template <unsigned int BLOCK_SIZE, unsigned int STRIDE>
 __global__ void
-gemm_v3(int M, int K, int N, float *d_A, float *d_B, float *d_C)
-{
-    // 在 SMem 中存储 d_A 和 d_B 的块 读取 STRIDE*STRIDE 个数据
+gemm_v3(
+    int M, int K, int N,
+    float *__restrict__ d_A,
+    float *__restrict__ d_B,
+    float *__restrict__ d_C)
+ {   // 在 SMem 中存储 d_A 和 d_B 的块 读取 STRIDE*STRIDE 个数据
     __shared__ float A_block[BLOCK_SIZE * STRIDE][BLOCK_SIZE * STRIDE];
     __shared__ float B_block[BLOCK_SIZE * STRIDE][BLOCK_SIZE * STRIDE];
 
@@ -13,8 +17,6 @@ gemm_v3(int M, int K, int N, float *d_A, float *d_B, float *d_C)
     int col = blockIdx.x * BLOCK_SIZE * STRIDE + tx;
 
     // 在第一个分块矩阵中的坐标 其他 STRIDE*STRIDE - 1 个块在这个基础上加
-    
-
     float sum[STRIDE][STRIDE] = {0.0f};
     for (int k = 0; k < K; k += STRIDE * BLOCK_SIZE)
     {

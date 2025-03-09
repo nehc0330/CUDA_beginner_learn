@@ -1,3 +1,5 @@
+#pragma once
+
 #include"gemm_v1.cuh"
 #include"gemm_v2.cuh"
 #include"gemm_v3.cuh"
