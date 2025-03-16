@@ -55,8 +55,16 @@ gemm_v8(
     const int warp_id = tid / 32;
     const int lane_id = tid % 32;
     const int a_tile_index = warp_id / 2 * 16 + lane_id / 8 * 4;
-    // warp_id * 8 + (lane_id / 16)*4; // (warp_id/4)*32 + ((lane_id%16)/2)*4;
+    // 00 * 8 04 * 8 08 * 8 12 * 8
+    // 16 * 8 20 * 8 24 * 8 28 * 8
+    // 32 * 8 36 * 8 40 * 8 44 * 8
+    // 48 * 8 52 * 8 56 * 8 60 * 8
+    // 以上4warps循环一次
     const int b_tile_index = warp_id % 2 * 32 + lane_id % 8 * 4;
+    // 0-4-8-12-16-20-24-28 * 4
+    // 32-36-40-44-48-52-56-60 * 4
+    // 以上2warps循环一次
+    // 这样保证了所有的行列组合c都被计算到
 
     // 在进入循环之前 先从 GMem 预取出一部分到 SMem 中 也就是原先的循环的第一部分的操作
     // 之后进入循环 从 GMem 中取出数据存入 SMem 的剩下部分，并计算第一部分的sum 再同步 也就是把原先的两次同步变味一次同步
@@ -69,6 +77,10 @@ gemm_v8(
     A_block[write][A_tile_tx * 4 + 1][A_tile_ty] = a_tmp[1];
     A_block[write][A_tile_tx * 4 + 2][A_tile_ty] = a_tmp[2];
     A_block[write][A_tile_tx * 4 + 3][A_tile_ty] = a_tmp[3];
+    // for (int i = 0; i < fetch_float; ++i)//303.55
+    // {
+    //     A_block[write][A_tile_tx * 4 + i][A_tile_ty] = a_tmp[i];
+    // }
 
     FETCH_FLOAT4(B_block[write][B_tile_ty][B_tile_tx * 4]) =
         FETCH_FLOAT4(d_B[OFFSET(B_tile_ty, col + B_tile_tx * 4, N)]);
@@ -87,16 +99,18 @@ gemm_v8(
     do
     {
         tile_idx += K_per_BLOCK;
-
+#pragma unroll
         for (int inner_k = 0; inner_k < K_per_BLOCK - 1; ++inner_k)
         {
             FETCH_FLOAT4(a_reg[(inner_k + 1) % 2][0]) = FETCH_FLOAT4(A_block[read][inner_k + 1][a_tile_index]);
             FETCH_FLOAT4(a_reg[(inner_k + 1) % 2][4]) = FETCH_FLOAT4(A_block[read][inner_k + 1][a_tile_index + 64]);
             FETCH_FLOAT4(b_reg[(inner_k + 1) % 2][0]) = FETCH_FLOAT4(B_block[read][inner_k + 1][b_tile_index]);
             FETCH_FLOAT4(b_reg[(inner_k + 1) % 2][4]) = FETCH_FLOAT4(B_block[read][inner_k + 1][b_tile_index + 64]);
-            // 计算预取的和
+// 计算预取的和
+#pragma unroll
             for (int i = 0; i < Y_per_THREAD; ++i)
             {
+#pragma unroll
                 for (int j = 0; j < X_per_THREAD; ++j)
                 {
                     sum[i][j] += a_reg[inner_k % 2][i] * b_reg[inner_k % 2][j];
@@ -111,6 +125,10 @@ gemm_v8(
             A_block[write][A_tile_tx * 4 + 1][A_tile_ty] = a_tmp[1];
             A_block[write][A_tile_tx * 4 + 2][A_tile_ty] = a_tmp[2];
             A_block[write][A_tile_tx * 4 + 3][A_tile_ty] = a_tmp[3];
+            // for (int i = 0; i < fetch_float; ++i)
+            // {
+            //     A_block[write][A_tile_tx * 4 + i][A_tile_ty] = a_tmp[i];
+            // }
 
             FETCH_FLOAT4(B_block[write][B_tile_ty][B_tile_tx * 4]) =
                 FETCH_FLOAT4(d_B[OFFSET(B_tile_ty + tile_idx, col + B_tile_tx * 4, N)]);
@@ -122,8 +140,10 @@ gemm_v8(
         FETCH_FLOAT4(a_reg[0][4]) = FETCH_FLOAT4(A_block[read][0][a_tile_index + 64]);
         FETCH_FLOAT4(b_reg[0][0]) = FETCH_FLOAT4(B_block[read][0][b_tile_index]);
         FETCH_FLOAT4(b_reg[0][4]) = FETCH_FLOAT4(B_block[read][0][b_tile_index + 64]);
+#pragma unroll
         for (int i = 0; i < Y_per_THREAD; ++i)
         {
+#pragma unroll
             for (int j = 0; j < X_per_THREAD; ++j)
             {
                 sum[i][j] += a_reg[1][i] * b_reg[1][j];
@@ -136,281 +156,22 @@ gemm_v8(
 
     for (int i = 0; i < 4; ++i)
     {
-        FETCH_FLOAT4(d_C[OFFSET(row + a_tile_index + i, col + b_tile_index, N)]) = FETCH_FLOAT4(sum[i][0]);
+        if ((row + a_tile_index + i) < M && (col + b_tile_index) < N)
+            FETCH_FLOAT4(d_C[OFFSET(row + a_tile_index + i, col + b_tile_index, N)]) = FETCH_FLOAT4(sum[i][0]);
     }
     for (int i = 0; i < 4; ++i)
     {
-        FETCH_FLOAT4(d_C[OFFSET(row + a_tile_index + i, col + b_tile_index + 64, N)]) = FETCH_FLOAT4(sum[i][4]);
+        if ((row + a_tile_index + i) < M && (col + b_tile_index + 64) < N)
+            FETCH_FLOAT4(d_C[OFFSET(row + a_tile_index + i, col + b_tile_index + 64, N)]) = FETCH_FLOAT4(sum[i][4]);
     }
     for (int i = 0; i < 4; ++i)
     {
-        FETCH_FLOAT4(d_C[OFFSET(row + a_tile_index + i + 64, col + b_tile_index, N)]) = FETCH_FLOAT4(sum[i + 4][0]);
+        if ((a_tile_index + i + 64) < M && (col + b_tile_index) < N)
+            FETCH_FLOAT4(d_C[OFFSET(row + a_tile_index + i + 64, col + b_tile_index, N)]) = FETCH_FLOAT4(sum[i + 4][0]);
     }
     for (int i = 0; i < 4; ++i)
     {
-        FETCH_FLOAT4(d_C[OFFSET(row + a_tile_index + i + 64, col + b_tile_index + 64, N)]) = FETCH_FLOAT4(sum[i + 4][4]);
+        if ((a_tile_index + i + 64) < M && (col + b_tile_index + 64) < N)
+            FETCH_FLOAT4(d_C[OFFSET(row + a_tile_index + i + 64, col + b_tile_index + 64, N)]) = FETCH_FLOAT4(sum[i + 4][4]);
     }
 }
-
-
-// template <
-//     const int BLOCK_SIZE_M,  // height of block of C that each thread block calculate
-//     const int BLOCK_SIZE_K,  // width of block of A that each thread block load into shared memory
-//     const int BLOCK_SIZE_N,  // width of block of C that each thread block calculate
-//     const int THREAD_SIZE_Y, // height of block of C that each thread calculate
-//     const int THREAD_SIZE_X  // width of block of C that each thread calculate
-//     >
-    
-// __global__ void
-// gemm_v8(
-//     int M, int K, int N,
-//     float *__restrict__ A,
-//     float *__restrict__ B,
-//     float *__restrict__ C){
-//     // thread Block index
-//     int bx = blockIdx.x;
-//     int by = blockIdx.y;
-
-//     // Thread index
-//     int tx = threadIdx.x;
-//     int ty = threadIdx.y;
-    
-//     // the threads number in Block of X,Y
-//     const int THREAD_X_PER_BLOCK = BLOCK_SIZE_N / THREAD_SIZE_X;// x方向上的线程数
-//     const int THREAD_Y_PER_BLOCK = BLOCK_SIZE_M / THREAD_SIZE_Y;// y方向上的线程数
-//     const int THREAD_NUM_PER_BLOCK = THREAD_X_PER_BLOCK * THREAD_Y_PER_BLOCK;// 16 * 16 个线程
-
-//     // thread id in cur Block
-//     const int tid = ty * THREAD_X_PER_BLOCK + tx;
-
-//     // shared memory
-//     __shared__ float As[2][BLOCK_SIZE_K][BLOCK_SIZE_M];
-//     __shared__ float Bs[2][BLOCK_SIZE_K][BLOCK_SIZE_N];
-//     // registers for C
-//     float accum[THREAD_SIZE_Y][THREAD_SIZE_X];
-//     #pragma unroll//????????????
-//     for(int i=0; i<THREAD_SIZE_Y; i++){
-//         #pragma unroll
-//         for(int j=0; j<THREAD_SIZE_X; j++){
-//             accum[i][j]=0.0;
-//         }
-//     }
-//     // registers for A and B
-//     float frag_a[2][THREAD_SIZE_Y];
-//     float frag_b[2][THREAD_SIZE_X];
-
-
-//     // registers load global memory ??????????? 
-//     const int ldg_num_a = BLOCK_SIZE_M * BLOCK_SIZE_K / (THREAD_NUM_PER_BLOCK * 4); // 1
-//     const int ldg_num_b = BLOCK_SIZE_K * BLOCK_SIZE_N / (THREAD_NUM_PER_BLOCK * 4); // 1 
-//     float ldg_a_reg[4*ldg_num_a];
-//     float ldg_b_reg[4*ldg_num_b];
-
-//     // threads number in one row
-//     const int A_TILE_THREAD_PER_ROW = BLOCK_SIZE_K / 4;
-//     const int B_TILE_THREAD_PER_ROW = BLOCK_SIZE_N / 4;
-
-//     // row number and col number that needs to be loaded by this thread
-//     const int A_TILE_ROW_START = tid / A_TILE_THREAD_PER_ROW;
-//     const int B_TILE_ROW_START = tid / B_TILE_THREAD_PER_ROW;
-
-//     const int A_TILE_COL = tid % A_TILE_THREAD_PER_ROW * 4; 
-//     const int B_TILE_COL = tid % B_TILE_THREAD_PER_ROW * 4;
-
-//     // row stride that thread uses to load multiple rows of a tile
-//     const int A_TILE_ROW_STRIDE = THREAD_NUM_PER_BLOCK / A_TILE_THREAD_PER_ROW;
-//     const int B_TILE_ROW_STRIDE = THREAD_NUM_PER_BLOCK / B_TILE_THREAD_PER_ROW;
-
-//     A = &A[(BLOCK_SIZE_M * by)* K];
-//     B = &B[BLOCK_SIZE_N * bx];
-
-//     //load index of the tile
-//     const int warp_id = tid / 32;
-//     const int lane_id = tid % 32;
-//     const int a_tile_index =  warp_id/2*16 + lane_id/8*4; 
-//     //warp_id * 8 + (lane_id / 16)*4; // (warp_id/4)*32 + ((lane_id%16)/2)*4;
-//     const int b_tile_index =  warp_id%2*32 + lane_id%8*4; 
-//     //(lane_id % 16) * 4; // (warp_id%4)*16 + (lane_id/16)*8 + (lane_id%2)*4;
-    
-//     // transfer first tile from global mem to shared mem
-//     // load A from global memory to shared memory
-//     #pragma unroll
-//     for ( int i = 0 ; i < BLOCK_SIZE_M ; i += A_TILE_ROW_STRIDE) {
-//         int ldg_index = i / A_TILE_ROW_STRIDE * 4;
-//         FETCH_FLOAT4(ldg_a_reg[ldg_index]) = FETCH_FLOAT4(A[OFFSET(
-//             A_TILE_ROW_START + i, // row
-//             A_TILE_COL, // col
-//             K )]);
-//         As[0][A_TILE_COL][A_TILE_ROW_START + i]=ldg_a_reg[ldg_index];
-//         As[0][A_TILE_COL+1][A_TILE_ROW_START + i]=ldg_a_reg[ldg_index+1];
-//         As[0][A_TILE_COL+2][A_TILE_ROW_START + i]=ldg_a_reg[ldg_index+2];
-//         As[0][A_TILE_COL+3][A_TILE_ROW_START + i]=ldg_a_reg[ldg_index+3];
-//     }
-//     // load B from global memory to shared memory
-//     #pragma unroll
-//     for ( int i = 0 ; i < BLOCK_SIZE_K; i += B_TILE_ROW_STRIDE) {
-//         FETCH_FLOAT4(Bs[0][B_TILE_ROW_START + i][B_TILE_COL]) = FETCH_FLOAT4(B[OFFSET(
-//                 B_TILE_ROW_START + i, // row
-//                 B_TILE_COL, // col
-//                 N )]);
-//     }
-//     __syncthreads();
-    
-//     // load A from shared memory to register
-//     FETCH_FLOAT4(frag_a[0][0]) = FETCH_FLOAT4(As[0][0][a_tile_index]);
-//     FETCH_FLOAT4(frag_a[0][4]) = FETCH_FLOAT4(As[0][0][a_tile_index + 64]);
-    
-//     // load B from shared memory to register
-//     FETCH_FLOAT4(frag_b[0][0]) = FETCH_FLOAT4(Bs[0][0][b_tile_index]);
-//     FETCH_FLOAT4(frag_b[0][4]) = FETCH_FLOAT4(Bs[0][0][b_tile_index + 64]);
-    
-//     int write_stage_idx = 1;
-//     int tile_idx = 0;
-
-
-
-
-
-
-
-
-//     do{
-//         // next tile index
-//         tile_idx += BLOCK_SIZE_K;
-//         // load next tile from global mem
-//         if(tile_idx< K){
-//             #pragma unroll
-//             for ( int i = 0 ; i < BLOCK_SIZE_M ; i += A_TILE_ROW_STRIDE) {
-//                 int ldg_index = i / A_TILE_ROW_STRIDE * 4;
-//                 FETCH_FLOAT4(ldg_a_reg[ldg_index]) = FETCH_FLOAT4(A[OFFSET(
-//                     A_TILE_ROW_START + i, // row
-//                     A_TILE_COL + tile_idx, // col
-//                     K )]);
-//             }
-//             #pragma unroll
-//             for ( int i = 0 ; i < BLOCK_SIZE_K; i += B_TILE_ROW_STRIDE) {
-//                 int ldg_index = i / B_TILE_ROW_STRIDE * 4;
-//                 FETCH_FLOAT4(ldg_b_reg[ldg_index]) = FETCH_FLOAT4(B[OFFSET(
-//                     tile_idx + B_TILE_ROW_START + i, // row
-//                     B_TILE_COL, // col
-//                     N )]);
-//             }
-//         }
-
-//         int load_stage_idx = write_stage_idx ^ 1;
-
-
-
-
-        
-//         #pragma unroll
-//         for(int j=0; j<BLOCK_SIZE_K - 1; ++j){
-//             // load next tile from shared mem to register 
-//             // load A from shared memory to register
-//             FETCH_FLOAT4(frag_a[(j+1)%2][0]) = FETCH_FLOAT4(As[load_stage_idx][(j+1)][a_tile_index]);
-//             FETCH_FLOAT4(frag_a[(j+1)%2][4]) = FETCH_FLOAT4(As[load_stage_idx][(j+1)][a_tile_index + 64]);
-//             // load B from shared memory to register
-//             FETCH_FLOAT4(frag_b[(j+1)%2][0]) = FETCH_FLOAT4(Bs[load_stage_idx][(j+1)][b_tile_index]);
-//             FETCH_FLOAT4(frag_b[(j+1)%2][4]) = FETCH_FLOAT4(Bs[load_stage_idx][(j+1)][b_tile_index + 64]);
-//             // compute C THREAD_SIZE_X x THREAD_SIZE_Y
-//             #pragma unroll
-//             for (int thread_y = 0; thread_y < THREAD_SIZE_Y; ++thread_y) {
-//                 #pragma unroll
-//                 for (int thread_x = 0; thread_x < THREAD_SIZE_X; ++thread_x) {
-//                     accum[thread_y][thread_x] += frag_a[j%2][thread_y] * frag_b[j%2][thread_x];
-//                 }
-//             }
-//         }
-
-
-
-
-//         if(tile_idx < K){
-//             // load A from global memory to shared memory
-//             #pragma unroll
-//             for ( int i = 0 ; i < BLOCK_SIZE_M ; i += A_TILE_ROW_STRIDE) {
-//                 int ldg_index = i / A_TILE_ROW_STRIDE * 4;
-//                 As[write_stage_idx][A_TILE_COL][A_TILE_ROW_START + i]=ldg_a_reg[ldg_index];
-//                 As[write_stage_idx][A_TILE_COL+1][A_TILE_ROW_START + i]=ldg_a_reg[ldg_index+1];
-//                 As[write_stage_idx][A_TILE_COL+2][A_TILE_ROW_START + i]=ldg_a_reg[ldg_index+2];
-//                 As[write_stage_idx][A_TILE_COL+3][A_TILE_ROW_START + i]=ldg_a_reg[ldg_index+3];
-//             }
-//             // load B from global memory to shared memory
-//             #pragma unroll
-//             for ( int i = 0 ; i < BLOCK_SIZE_K; i += B_TILE_ROW_STRIDE) {
-//                 int ldg_index = i / B_TILE_ROW_STRIDE * 4;
-//                 FETCH_FLOAT4(Bs[write_stage_idx][B_TILE_ROW_START + i][B_TILE_COL]) = FETCH_FLOAT4(ldg_b_reg[ldg_index]);
-//             }
-//             // use double buffer, only need one sync
-//             __syncthreads();
-//             // switch
-//             write_stage_idx ^= 1;
-//         }
-
-
-
-
-//         // load first tile from shared mem to register of next iter
-//         // load A from shared memory to register
-//         FETCH_FLOAT4(frag_a[0][0]) = FETCH_FLOAT4(As[load_stage_idx^1][0][a_tile_index]);
-//         FETCH_FLOAT4(frag_a[0][4]) = FETCH_FLOAT4(As[load_stage_idx^1][0][a_tile_index + 64]);
-//         // load B from shared memory to register
-//         FETCH_FLOAT4(frag_b[0][0]) = FETCH_FLOAT4(Bs[load_stage_idx^1][0][b_tile_index]);
-//         FETCH_FLOAT4(frag_b[0][4]) = FETCH_FLOAT4(Bs[load_stage_idx^1][0][b_tile_index + 64]);
-//         // compute C THREAD_SIZE_X x THREAD_SIZE_Y
-//         #pragma unroll
-//         for (int thread_y = 0; thread_y < THREAD_SIZE_Y; ++thread_y) {
-//             #pragma unroll
-//             for (int thread_x = 0; thread_x < THREAD_SIZE_X; ++thread_x) {
-//                 accum[thread_y][thread_x] += frag_a[1][thread_y] * frag_b[1][thread_x];
-//             }
-//         }
-//     }while(tile_idx< K);
-    
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-//     const int c_block_row = a_tile_index;
-//     const int c_block_col = b_tile_index;
-
-//     //store C00 block
-//     for(int i=0; i<4; i++){
-//       FETCH_FLOAT4(C[OFFSET(
-//         BLOCK_SIZE_M * by + c_block_row + i,
-//         BLOCK_SIZE_N * bx + c_block_col,
-//         N)]) = FETCH_FLOAT4(accum[i][0]);
-//     }
-//     //store C01 block
-//     for(int i=0; i<4; i++){
-//       FETCH_FLOAT4(C[OFFSET(
-//         BLOCK_SIZE_M * by + c_block_row + i,
-//         BLOCK_SIZE_N * bx + c_block_col + 64,
-//         N)]) = FETCH_FLOAT4(accum[i][4]);
-//     }
-//     //store C10 block
-//     for(int i=0; i<4; i++){
-//       FETCH_FLOAT4(C[OFFSET(
-//         BLOCK_SIZE_M * by + c_block_row + 64 + i,
-//         BLOCK_SIZE_N * bx + c_block_col,
-//         N)]) = FETCH_FLOAT4(accum[i+4][0]);
-//     }
-//     //store C11 block
-//     for(int i=0; i<4; i++){
-//       FETCH_FLOAT4(C[OFFSET(
-//         BLOCK_SIZE_M * by + c_block_row + 64 + i,
-//         BLOCK_SIZE_N * bx + c_block_col + 64,
-//         N)]) = FETCH_FLOAT4(accum[i+4][4]);
-//     }
-// }

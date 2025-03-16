@@ -20,6 +20,7 @@ gemm_v2(
     int tx = threadIdx.x, ty = threadIdx.y;
 
     float sum = 0.0f;
+
     for (int k = 0; k < K; k += BLOCK_SIZE)
     {
         // 把数据中从 GMem 中记录到 SMem 中

@@ -8,13 +8,6 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   target_compile_options(test_gemm PRIVATE $<$<CONFIG:Debug>:-G>)
 endif()
 
-# add_executable(ex ex.cu)
-   
-# target_link_libraries(ex PRIVATE CUDA::cudart ${CUDA_cublas_LIBRARY})
-# if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-#   target_compile_options(ex PRIVATE $<$<CONFIG:Debug>:-G>)
-# endif()
-
 
 # 链接 CUDA 运行时库和 cuBLAS
 target_link_libraries(test_gemm PRIVATE CUDA::cudart cublas)

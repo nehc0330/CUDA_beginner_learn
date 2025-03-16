@@ -67,6 +67,7 @@ gemm_v7(
     __syncthreads();
     write ^= 1;
     // 开始循环
+    #pragma once
     for (int k = K_per_BLOCK; k < K; k += K_per_BLOCK)
     {
         tmp = FETCH_FLOAT4(d_A[OFFSET(row + A_tile_ty, k + A_tile_tx * 4, K)]);
@@ -82,6 +83,7 @@ gemm_v7(
         write ^= 1;
 
         // 利用寄存器
+        #pragma once
         for (int inner_k = 0; inner_k < K_per_BLOCK; ++inner_k)
         {
             float a_reg[Y_per_THREAD];
@@ -101,7 +103,7 @@ gemm_v7(
         __syncthreads();
         read ^= 1;
     }
-
+    #pragma once
     for (int inner_k = 0; inner_k < K_per_BLOCK; ++inner_k)
     {
         float a_reg[Y_per_THREAD];
@@ -110,8 +112,10 @@ gemm_v7(
         FETCH_FLOAT4(a_reg[4]) = FETCH_FLOAT4(A_block[read][inner_k][ty * Y_per_THREAD + 4]);
         FETCH_FLOAT4(b_reg[0]) = FETCH_FLOAT4(B_block[read][inner_k][tx * X_per_THREAD]);
         FETCH_FLOAT4(b_reg[4]) = FETCH_FLOAT4(B_block[read][inner_k][tx * X_per_THREAD + 4]);
+        #pragma once
         for (int i = 0; i < Y_per_THREAD; ++i)
         {
+            #pragma once
             for (int j = 0; j < X_per_THREAD; ++j)
             {
                 sum[i][j] += a_reg[i] * b_reg[j];
@@ -120,7 +124,7 @@ gemm_v7(
     }
 
     // 同步 下一步循环要清空SMem 必须要把数据用完
-
+    #pragma once
     for (int i = 0; i < Y_per_THREAD; ++i)
     {
         for (int j = 0; j < X_per_THREAD; ++j)

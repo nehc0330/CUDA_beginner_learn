@@ -3,6 +3,8 @@
 #define tol 1e-2 // machine zero 0.01
 #define OFFSET(row, col, ld) ((row) * (ld) + (col))
 #define FETCH_FLOAT4(pointer) (reinterpret_cast<float4 *>(&(pointer))[0])
+#define fetch_float 4
+#define warpSize 32
 #define checkCudaErrors(func)                                                      \
     {                                                                              \
         cudaError_t e = (func);                                                    \

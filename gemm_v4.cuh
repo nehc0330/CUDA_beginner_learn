@@ -24,20 +24,10 @@ __global__ void gemm_v4(
 
     for (int k = 0; k < K; k += K_per_BLOCK)
     {
-
         if (row < M && k + tx * NUM_per_THREAD + NUM_per_THREAD - 1< K)
             FETCH_FLOAT4(A_block[ty][tx * NUM_per_THREAD]) = FETCH_FLOAT4(d_A[OFFSET(row, k + tx * NUM_per_THREAD, K)]);
-        // A_block[ty][tx * NUM_per_THREAD] = d_A[OFFSET(row, k + tx * NUM_per_THREAD, K)];
-        // A_block[ty][tx * NUM_per_THREAD + 1] = d_A[OFFSET(row, k + tx * NUM_per_THREAD + 1, K)];
-        // A_block[ty][tx * NUM_per_THREAD + 2] = d_A[OFFSET(row, k + tx * NUM_per_THREAD + 2, K)];
-        // A_block[ty][tx * NUM_per_THREAD + 3] = d_A[OFFSET(row, k + tx * NUM_per_THREAD + 3, K)];
         if (k + ty < K && col + NUM_per_THREAD - 1 < N)
             FETCH_FLOAT4(B_block[ty][tx * NUM_per_THREAD]) = FETCH_FLOAT4(d_B[OFFSET(k + ty, col, N)]);
-        // B_block[ty][tx * NUM_per_THREAD] = d_B[OFFSET(k + idy, col, N)];
-        // B_block[ty][tx * NUM_per_THREAD + 1] = d_B[OFFSET(k + idy, col + 1, N)];
-        // B_block[ty][tx * NUM_per_THREAD + 2] = d_B[OFFSET(k + idy, col + 2, N)];
-        // B_block[ty][tx * NUM_per_THREAD + 3] = d_B[OFFSET(k + idy, col + 3, N)];
-
         __syncthreads();
 
         for (int i = 0; i < NUM_per_THREAD; ++i)
@@ -50,6 +40,7 @@ __global__ void gemm_v4(
         // 同步 下一步循环要清空SMem 必须要把数据用完
         __syncthreads();
     }
+
     for (int i = 0; i < NUM_per_THREAD; ++i)
     {
         if (row < M && col + i < N)

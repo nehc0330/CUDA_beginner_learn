@@ -5,9 +5,11 @@
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
 int num = 1024;
-int nIter = 10;
+int nIter = 1;
 // C = A * B
-
+__global__ void warmup(){
+    printf("warmup!\n");
+}
 int main()
 {
     // sizeof A B C
@@ -73,6 +75,9 @@ int main()
     checkCudaErrors(cudaMemcpy(d_B, h_B, B_mem_size, cudaMemcpyHostToDevice));
     checkCudaErrors(cudaMemcpy(d_C_cublas, h_C_cublas, C_mem_size, cudaMemcpyHostToDevice));
     checkCudaErrors(cudaMemcpy(d_C, h_C_gpu, C_mem_size, cudaMemcpyHostToDevice));
+
+    warmup<<<1,1>>>();
+    
     //-------------------------------------gpu_calc----------------------------------------------------
     checkCudaErrors(cudaEventRecord(start)); // 0 Ä¬ÈÏÁ÷
     for (int run = 0 ; run < nIter; run ++ ) {

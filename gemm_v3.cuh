@@ -35,7 +35,7 @@ gemm_v3(
 
         // 同步 下一步要用共享内存的数据
         __syncthreads();
-#pragma unroll
+
         for (int i = 0; i < STRIDE; ++i)
         {
             for (int j = 0; j < STRIDE; ++j)

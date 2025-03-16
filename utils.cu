@@ -75,7 +75,7 @@ void STRIDE_ShareMemory(int M, int K, int N, float *__restrict__ d_A, float *__r
     checkCudaErrors(cudaDeviceSynchronize());
     constexpr int Block = 32;
     constexpr int STRIDE = 2;
-    dim3 block(Block, Block);
+    dim3 block(Block / STRIDE, Block / STRIDE);
     dim3 grid((N + Block * STRIDE - 1) / (Block * STRIDE), (M + Block * STRIDE - 1) / (Block * STRIDE));
     gemm_v3<Block, STRIDE><<<grid, block>>>(M, K, N, d_A, d_B, d_C);
     checkCudaErrors(cudaDeviceSynchronize());
@@ -88,8 +88,8 @@ void Float4_ShareMemory(int M, int K, int N, float *__restrict__ d_A, float *__r
     constexpr int K_per_BLOCK = 32;
     constexpr int N_per_BLOCK = 32;
     constexpr int NUM_per_THREAD = 4;
-    dim3 block(N_per_BLOCK/NUM_per_THREAD,M_per_BLOCK);
-    dim3 grid((N + N_per_BLOCK- 1) / (N_per_BLOCK), (M + M_per_BLOCK - 1) / (M_per_BLOCK));
+    dim3 block(N_per_BLOCK / NUM_per_THREAD, M_per_BLOCK);
+    dim3 grid((N + N_per_BLOCK - 1) / (N_per_BLOCK), (M + M_per_BLOCK - 1) / (M_per_BLOCK));
     gemm_v4<M_per_BLOCK, K_per_BLOCK, N_per_BLOCK, NUM_per_THREAD><<<grid, block>>>(M, K, N, d_A, d_B, d_C);
     checkCudaErrors(cudaDeviceSynchronize());
 }
@@ -101,8 +101,8 @@ void RMem_Float4_ShareMemory(int M, int K, int N, float *__restrict__ d_A, float
     constexpr int K_per_BLOCK = 32;
     constexpr int N_per_BLOCK = 32;
     constexpr int NUM_per_THREAD = 4;
-    dim3 block(N_per_BLOCK/NUM_per_THREAD,M_per_BLOCK/NUM_per_THREAD);
-    dim3 grid((N + N_per_BLOCK- 1) / (N_per_BLOCK), (M + M_per_BLOCK - 1) / (M_per_BLOCK));
+    dim3 block(N_per_BLOCK / NUM_per_THREAD, M_per_BLOCK / NUM_per_THREAD);
+    dim3 grid((N + N_per_BLOCK - 1) / (N_per_BLOCK), (M + M_per_BLOCK - 1) / (M_per_BLOCK));
     gemm_v5<M_per_BLOCK, K_per_BLOCK, N_per_BLOCK, NUM_per_THREAD><<<grid, block>>>(M, K, N, d_A, d_B, d_C);
     checkCudaErrors(cudaDeviceSynchronize());
 }
@@ -115,9 +115,9 @@ void Transpose_RMem_Float4_ShareMemory(int M, int K, int N, float *__restrict__ 
     constexpr int N_per_BLOCK = 32;
     constexpr int Y_per_THREAD = 4;
     constexpr int X_per_THREAD = 4;
-    dim3 block(N_per_BLOCK/X_per_THREAD,M_per_BLOCK/Y_per_THREAD);
-    dim3 grid((N + N_per_BLOCK- 1) / (N_per_BLOCK), (M + M_per_BLOCK - 1) / (M_per_BLOCK));
-    gemm_v6<M_per_BLOCK, K_per_BLOCK, N_per_BLOCK,Y_per_THREAD, X_per_THREAD><<<grid, block>>>(M, K, N, d_A, d_B, d_C);
+    dim3 block(N_per_BLOCK / X_per_THREAD, M_per_BLOCK / Y_per_THREAD);
+    dim3 grid((N + N_per_BLOCK - 1) / (N_per_BLOCK), (M + M_per_BLOCK - 1) / (M_per_BLOCK));
+    gemm_v6<M_per_BLOCK, K_per_BLOCK, N_per_BLOCK, Y_per_THREAD, X_per_THREAD><<<grid, block>>>(M, K, N, d_A, d_B, d_C);
     checkCudaErrors(cudaDeviceSynchronize());
 }
 
@@ -129,9 +129,9 @@ void Buffer_Transpose_RMem_Float4_ShareMemory(int M, int K, int N, float *__rest
     constexpr int N_per_BLOCK = 128;
     constexpr int Y_per_THREAD = 8;
     constexpr int X_per_THREAD = 8;
-    dim3 block(N_per_BLOCK/X_per_THREAD,M_per_BLOCK/Y_per_THREAD);
-    dim3 grid((N + N_per_BLOCK- 1) / (N_per_BLOCK), (M + M_per_BLOCK - 1) / (M_per_BLOCK));
-    gemm_v7<M_per_BLOCK, K_per_BLOCK, N_per_BLOCK,Y_per_THREAD, X_per_THREAD><<<grid, block>>>(M, K, N, d_A, d_B, d_C);
+    dim3 block(N_per_BLOCK / X_per_THREAD, M_per_BLOCK / Y_per_THREAD);
+    dim3 grid((N + N_per_BLOCK - 1) / (N_per_BLOCK), (M + M_per_BLOCK - 1) / (M_per_BLOCK));
+    gemm_v7<M_per_BLOCK, K_per_BLOCK, N_per_BLOCK, Y_per_THREAD, X_per_THREAD><<<grid, block>>>(M, K, N, d_A, d_B, d_C);
     checkCudaErrors(cudaDeviceSynchronize());
 }
 
@@ -143,8 +143,8 @@ void Double_Buffer_RMem_SMem(int M, int K, int N, float *__restrict__ d_A, float
     constexpr int N_per_BLOCK = 128;
     constexpr int Y_per_THREAD = 8;
     constexpr int X_per_THREAD = 8;
-    dim3 block(N_per_BLOCK/X_per_THREAD,M_per_BLOCK/Y_per_THREAD);// 16 * 16 
-    dim3 grid((N + N_per_BLOCK- 1) / (N_per_BLOCK), (M + M_per_BLOCK - 1) / (M_per_BLOCK));
-    gemm_v8<M_per_BLOCK, K_per_BLOCK, N_per_BLOCK,Y_per_THREAD, X_per_THREAD><<<grid, block>>>(M, K, N, d_A, d_B, d_C);
+    dim3 block(N_per_BLOCK / X_per_THREAD, M_per_BLOCK / Y_per_THREAD); // 16 * 16
+    dim3 grid((N + N_per_BLOCK - 1) / (N_per_BLOCK), (M + M_per_BLOCK - 1) / (M_per_BLOCK));
+    gemm_v8<M_per_BLOCK, K_per_BLOCK, N_per_BLOCK, Y_per_THREAD, X_per_THREAD><<<grid, block>>>(M, K, N, d_A, d_B, d_C);
     checkCudaErrors(cudaDeviceSynchronize());
 }
