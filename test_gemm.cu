@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
+
 int num = 1024;
 int nIter = 1;
 // C = A * B
