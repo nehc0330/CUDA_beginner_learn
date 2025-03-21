@@ -1,6 +1,6 @@
 #include <cstdio>
 #include <cuda.h>
-#include "utils.cuh"
+#include "utlis.cuh"
 #include <cmath>
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
