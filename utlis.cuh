@@ -15,7 +15,7 @@
 void init_matrix(int row, int col, float *matrix);
 void cpu_gemm(float *A, float *B, float *C, const int m, const int k, const int n);
 void compare_ans(float *h_C_cpu, float *h_C_gpu, int m, int n);
-void GlobalMemory(int M, int K, int N,float *__restrict__ d_A,   float *__restrict__ d_B,    float *__restrict__ d_C);
+void GlobalMemory(int M, int K, int N, float *__restrict__ d_A, float *__restrict__ d_B, float *__restrict__ d_C);
 void ShareMemory(int M, int K, int N, float *__restrict__ d_A, float *__restrict__ d_B, float *__restrict__ d_C);
 void STRIDE_ShareMemory(int M, int K, int N, float *__restrict__ d_A, float *__restrict__ d_B, float *__restrict__ d_C);
 void Float4_ShareMemory(int M, int K, int N, float *__restrict__ d_A, float *__restrict__ d_B, float *__restrict__ d_C);

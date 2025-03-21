@@ -1,6 +1,6 @@
 add_executable(test_gemm 
     test_gemm.cu 
-    utils.cu  # 添加这一行
+    utlis.cu
 )
 
 target_link_libraries(test_gemm PRIVATE CUDA::cudart ${CUDA_cublas_LIBRARY})

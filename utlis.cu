@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/time.h>
-#include "utils.cuh"
+#include "utlis.cuh"
 #include "kernels.cuh"
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
