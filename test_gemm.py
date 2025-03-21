@@ -1,14 +1,16 @@
 import torch
 import time
 from torch.utils.cpp_extension import load
+import gemm  # setup.py should be run before running this code
 
 # 1. load C++/CUDA
-gemm = load(
-    name="double_buffer_gemm",
-    sources=["my_gemm.cpp", "utlis.cu"],  # my C++ & CUDA
-    extra_cuda_cflags=["-O3"],
-    verbose=True,
-)
+# gemm = load(
+#     name="double_buffer_gemm",
+#     sources=["my_gemm.cpp", "utlis.cu"],  # my C++ & CUDA
+#     extra_cuda_cflags=["-O3"],
+#     verbose=False,  # verbose 参数控制是否显示详细的编译过程。当设置为 True 时，编译过程中的详细信息（如编译命令、错误消息等）会显示在终端中。这对于调试编译问题很有帮助。
+# )
+
 
 # 2. input parameters
 M, K, N = 1024, 1024, 1024
